@@ -1,0 +1,85 @@
+# Launch Odoo 20.0 built from THIS repository + PostgreSQL.
+#
+#   docker compose up --build -d
+#   docker compose logs -f web
+#   -> open http://localhost:8069
+#
+# Full instructions and troubleshooting: LAUNCH_GUIDE.md
+#
+# Design notes (each one prevents a common first-run failure):
+#  * The image is BUILT from this source (./Dockerfile), so the Odoo
+#    version can never mismatch this checkout or your database.
+#  * `db` has a healthcheck and `web` waits for `service_healthy`,
+#    *and* the entrypoint waits for a real DB connection, so Odoo
+#    never starts before PostgreSQL is ready ("Internal Server
+#    Error" on the first page).
+#  * DB credentials are defined ONCE (variables below, optionally
+#    overridden from a .env file — see .env.example) and shared by
+#    both services. No duplicated hard-coded passwords to drift.
+#  * Volumes are named `odoo20-*` so they can never collide with a
+#    volume left over from some older Odoo/PostgreSQL tutorial
+#    (re-using such a volume is another classic 500-error cause).
+#  * Everything has defaults: even without a .env file,
+#    `docker compose up --build` just works.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hnmodeq-odoo:20.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-odoo}
+      DB_PASSWORD: ${DB_PASSWORD:-odoo}
+      # Master password asked by the database-creation screen.
+      # CHANGE THIS in .env for anything beyond your own laptop.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+      # gevent / websocket (live chat, notifications, bus)
+      - "${ODOO_GEVENT_PORT:-8072}:8072"
+    volumes:
+      - odoo20-web-data:/var/lib/odoo
+      # Optional: put your own modules in ./addons_custom and
+      # uncomment the next line to load them.
+      # - ./addons_custom:/mnt/extra-addons:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8069/web/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-odoo}
+      # Keep the data in a subdirectory so the named volume's
+      # root directory permissions can never confuse PostgreSQL.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - odoo20-db-data:/var/lib/postgresql/data
+    # Not exposed to the host by default (safer). If you need to
+    # connect with psql/pgAdmin from your machine, uncomment:
+    # ports:
+    #   - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      # $$ escapes the variable for the shell INSIDE the container.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  odoo20-web-data:
+  odoo20-db-data:

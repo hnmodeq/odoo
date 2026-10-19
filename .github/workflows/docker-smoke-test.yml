@@ -1,0 +1,91 @@
+name: Docker smoke test
+
+# Verifies that the launch setup in this repo actually works:
+# builds the image from ./Dockerfile, initializes a real database,
+# starts the stack and checks that the login page answers and that
+# the admin user can authenticate. This is the test that catches
+# "Internal Server Error" on first launch before users do.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - docker/**
+      - requirements.txt
+      - .github/workflows/docker-smoke-test.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - docker/**
+      - requirements.txt
+      - .github/workflows/docker-smoke-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the Odoo image from this source
+        run: docker compose build web
+
+      - name: Check the server binary runs (Python 3.12, deps importable)
+        run: |
+          docker compose run --rm --no-deps --entrypoint python web /opt/odoo/odoo-bin --version
+          docker compose run --rm --no-deps --entrypoint python web -c "import psycopg2, ldap, lxml, PIL, gevent; print('imports OK')"
+
+      - name: Start PostgreSQL and wait until it is healthy
+        run: |
+          docker compose up -d db
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q db)")
+            echo "db health: $status"
+            [ "$status" = "healthy" ] && break
+            sleep 5
+          done
+          [ "$status" = "healthy" ]
+
+      - name: Initialize a database (base + web)
+        run: >
+          docker compose run --rm web odoo
+          -d testdb -i base,web --without-demo=all --stop-after-init
+
+      - name: Start Odoo and wait for the login page
+        run: |
+          docker compose up -d web
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8069/web/login || true)
+            echo "GET /web/login -> $code"
+            [ "$code" = "200" ] && break
+            sleep 5
+          done
+          [ "$code" = "200" ]
+
+      - name: Verify admin can authenticate (JSON-RPC)
+        run: |
+          curl -s -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","method":"call","params":{"db":"testdb","login":"admin","password":"admin"},"id":1}' \
+            http://localhost:8069/web/session/authenticate | tee /tmp/auth.json
+          grep -q '"uid": 2' /tmp/auth.json
+          grep -q '"server_version": "20.0"' /tmp/auth.json
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail=300 web db || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

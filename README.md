@@ -1,5 +1,10 @@
 # Odoo
 
+> 🚀 **Want to run this fork? Start with [LAUNCH_GUIDE.md](LAUNCH_GUIDE.md)** —
+> `docker compose up --build -d`, then open http://localhost:8069
+> (includes setup for Docker/source installs and fixes for the common
+> "Internal Server Error" first-launch problems).
+
 [![Build Status](https://runbot.odoo.com/runbot/badge/flat/1/master.svg)](https://runbot.odoo.com/runbot)
 [![Tech Doc](https://img.shields.io/badge/master-docs-875A7B.svg?style=flat&colorA=8F8F8F)](https://www.odoo.com/documentation/master)
 [![Help](https://img.shields.io/badge/master-help-875A7B.svg?style=flat&colorA=8F8F8F)](https://www.odoo.com/forum/help-1)
