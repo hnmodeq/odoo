@@ -1,0 +1,32 @@
+# Keep the Docker build context small and reproducible.
+# Without this, `docker compose build` would upload the whole
+# 1.4 GB checkout INCLUDING the .git directory on every build.
+.git
+.git/**
+.github
+.gitignore
+.git-blame-ignore-revs
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.try.yml
+.env
+.env.example
+LAUNCH_GUIDE.md
+Makefile
+
+# Local environments / caches / generated data
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+*.log
+.pytest_cache
+.ruff_cache
+.mypy_cache
+addons_custom
+
+# Docs/tests tooling not needed at runtime
+doc
+.weblate.json

@@ -1,0 +1,32 @@
+; Example config for running Odoo from source WITHOUT Docker
+; (Method 3 in LAUNCH_GUIDE.md). Copy to "odoo.conf" and adapt,
+; then start with:  ./odoo-bin -c odoo.conf
+;
+; Docker users do NOT need this file — docker/entrypoint.sh
+; generates the config from environment variables automatically.
+
+[options]
+; Master password for database creation/management. CHANGE ME.
+admin_passwd = admin
+
+db_host = localhost
+db_port = 5432
+db_user = odoo
+; Note the underscore: --db_password on the CLI, db_password here.
+; (--db-password with a hyphen does not exist and fails.)
+db_password = odoo
+
+addons_path = addons
+data_dir = ./data
+
+http_interface = 127.0.0.1
+http_port = 8069
+gevent_port = 8072
+
+; 0 = threaded mode, fine for development / small installs.
+; For production use workers > 0 behind a reverse proxy and
+; set proxy_mode = True — see LAUNCH_GUIDE.md "Production notes".
+workers = 0
+proxy_mode = False
+list_db = True
+log_level = info

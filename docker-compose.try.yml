@@ -1,0 +1,63 @@
+# QUICK LOOK ONLY — run the OFFICIAL Odoo 20.0 image (no build).
+#
+#   docker compose -f docker-compose.try.yml up -d
+#   -> open http://localhost:8069
+#
+# This does NOT run the code in this repository; it downloads the
+# official `odoo:20.0` image from Docker Hub. Use it to see what
+# Odoo looks like in 2 minutes. To run/develop THIS code, use the
+# main docker-compose.yml instead (see LAUNCH_GUIDE.md).
+#
+# Notes vs. the naive compose file found in many tutorials:
+#  * image is odoo:20.0 (matches this repo) — NOT 19.0/18.0.
+#  * db has a healthcheck and web waits for service_healthy, so
+#    Odoo doesn't start before PostgreSQL is ready.
+#  * credentials are shared variables (optional .env override).
+#  * volume names are unique (`odoo20-try-*`) so a leftover volume
+#    from another version can never poison this install.
+
+services:
+  web:
+    image: odoo:20.0
+    depends_on:
+      db:
+        condition: service_healthy
+    # Variable names expected by the official image's entrypoint.
+    environment:
+      HOST: db
+      PORT: "5432"
+      USER: ${DB_USER:-odoo}
+      PASSWORD: ${DB_PASSWORD:-odoo}
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+      - "${ODOO_GEVENT_PORT:-8072}:8072"
+    volumes:
+      - odoo20-try-web-data:/var/lib/odoo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8069/web/login', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-odoo}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - odoo20-try-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  odoo20-try-web-data:
+  odoo20-try-db-data:
